@@ -1,8 +1,12 @@
 package com.covenantcode.crm.entity;
 
+
 import com.covenantcode.crm.entity.enums.RoleName;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.*;
+
 
 @Entity
 @Table(name = "roles")
@@ -18,7 +22,7 @@ public class Role {
     private Long id;
 
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, unique = true)
+    @Enumerated(EnumType.STRING)
     private RoleName name;
 }

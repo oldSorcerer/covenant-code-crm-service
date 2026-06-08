@@ -1,16 +1,21 @@
 package com.covenantcode.crm.security;
 
+import com.covenantcode.crm.repository.UserRepository;
+import lombok.*;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
+
+    private final UserRepository userRepository;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // TODO: inject UserRepository and load user entity once User domain is created
-        throw new UsernameNotFoundException("User not found: " + username);
+        return userRepository.findByEmail(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь с email " + username + " не найден"));
     }
 }

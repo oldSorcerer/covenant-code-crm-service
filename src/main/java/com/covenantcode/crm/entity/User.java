@@ -12,12 +12,13 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 
-@Entity
-@Table(name = "users")
+
 @Getter
 @Setter
+@Entity
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(name = "users")
 @Builder
 public class User implements UserDetails {
 
@@ -61,13 +62,13 @@ public class User implements UserDetails {
     }
 
     @Override
-    public String getUsername() {
-        return email;
+    public String getPassword() {
+        return this.password;
     }
 
     @Override
-    public String getPassword() {
-        return password;
+    public String getUsername() {
+        return email;
     }
 
     @Override

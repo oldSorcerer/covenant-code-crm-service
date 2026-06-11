@@ -4,6 +4,8 @@ import com.covenantcode.crm.dto.user.UserResponse;
 import com.covenantcode.crm.entity.Role;
 import com.covenantcode.crm.entity.User;
 import com.covenantcode.crm.entity.enums.RoleName;
+import com.covenantcode.crm.exception.ForbiddenException;
+import com.covenantcode.crm.exception.ResourceNotFoundException;
 import com.covenantcode.crm.mapper.UserMapper;
 import com.covenantcode.crm.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -137,5 +140,112 @@ public class UserServiceImplTest {
 
         verify(userRepository).findAll(pageable);
         verify(userMapper, never()).toResponse(any());
+    }
+
+    @Test
+    void getUserById_whenAdminRequestsAnotherUser_thenSuccess() {
+
+        Long adminId = 1L;
+        Long targetId = 2L;
+        User adminUser = buildUser(adminId, RoleName.ADMIN);
+        User targetUser = buildUser(targetId, RoleName.MANAGER);
+        UserResponse expectedResponse = new UserResponse();
+
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(targetUser));
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(adminUser));
+        when(userMapper.toResponse(targetUser)).thenReturn(expectedResponse);
+
+        UserResponse result = userService.getUserById(targetId, adminId);
+
+        assertNotNull(result);
+        assertEquals(expectedResponse, result);
+        verify(userRepository).findById(targetId);
+        verify(userRepository).findById(adminId);
+        verify(userMapper).toResponse(targetUser);
+    }
+
+    @Test
+    void getUserById_whenUserRequestsOwnProfile_thenSuccess() {
+
+        Long userId = 5L;
+        User user = buildUser(userId, RoleName.MANAGER);
+        UserResponse expectedResponse = new UserResponse();
+
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userMapper.toResponse(user)).thenReturn(expectedResponse);
+
+        UserResponse result = userService.getUserById(userId, userId);
+
+        assertNotNull(result);
+        assertEquals(expectedResponse, result);
+        verify(userRepository, times(2)).findById(userId);
+    }
+
+    @Test
+    void getUserById_whenManagerRequestsAnotherUser_thenForbiddenException() {
+
+        Long managerId = 5L;
+        Long otherUserId = 7L;
+
+        User managerUser = buildUser(managerId, RoleName.MANAGER);
+        User otherUser = buildUser(otherUserId, RoleName.MANAGER);
+
+        when(userRepository.findById(otherUserId)).thenReturn(Optional.of(otherUser));
+        when(userRepository.findById(managerId)).thenReturn(Optional.of(managerUser));
+
+        assertThrows(ForbiddenException.class, () ->
+                userService.getUserById(otherUserId, managerId)
+        );
+
+        verify(userMapper, never()).toResponse(any());
+    }
+
+    @Test
+    void getUserById_whenTargetUserNotFound_thenEntityNotFoundException() {
+
+        Long targetId = 1L;
+        Long currentUserId = 1L;
+        when(userRepository.findById(targetId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> userService.getUserById(targetId, currentUserId));
+
+        verify(userMapper, never()).toResponse(any());
+    }
+
+    @Test
+    void getUserById_whenCurrentUserNotFound_thenEntityNotFoundException() {
+
+        Long targetId = 1L;
+        Long currentUserId = 2L;
+
+        User targetUser = new User();
+        targetUser.setId(targetId);
+
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(targetUser));
+
+        when(userRepository.findById(currentUserId)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            userService.getUserById(targetId, currentUserId);
+        });
+
+        verify(userRepository).findById(targetId);
+        verify(userRepository).findById(currentUserId);
+    }
+
+    private User buildUser(Long id, RoleName roleName) {
+        Role role = new Role();
+        role.setName(roleName);
+
+        User user = new User();
+        user.setId(id);
+        user.setEmail("user_" + id + "@test.com");
+        user.setFirstName("User");
+        user.setLastName(String.valueOf(id));
+        user.setRole(role);
+        user.setEnabled(true);
+        return user;
     }
 }

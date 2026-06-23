@@ -13,8 +13,11 @@ import com.covenantcode.crm.repository.CourseRepository;
 import com.covenantcode.crm.repository.StudyGroupRepository;
 import com.covenantcode.crm.service.CourseService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 
 @Service
 @RequiredArgsConstructor
@@ -73,5 +76,18 @@ public class CourseServiceImpl implements CourseService {
 
         Course savedCourse = courseRepository.save(course);
         return courseMapper.toResponse(savedCourse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CourseResponse> getAll(CourseStatus status, Pageable pageable) {
+        Page<Course> coursePage;
+
+        if (status == null) {
+            coursePage = courseRepository.findAll(pageable);
+        } else {
+            coursePage = courseRepository.findAllByStatus(status, pageable);
+        }
+        return coursePage.map(courseMapper::toResponse);
     }
 }

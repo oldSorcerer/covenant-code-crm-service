@@ -18,9 +18,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -260,4 +264,49 @@ public class CourseServiceImplTest {
 
         verify(courseRepository, never()).save(any());
     }
+
+    //тесты для getAll
+    @Test
+    void getAll_withoutFilter_returnsAllCourses() {
+        Course c1 = new Course(); c1.setId(1L); c1.setStatus(CourseStatus.ACTIVE);
+        Course c2 = new Course(); c2.setId(2L); c2.setStatus(CourseStatus.ARCHIVED);
+        Page<Course> page = new PageImpl<>(List.of(c1, c2));
+
+        when(courseRepository.findAll(any(Pageable.class))).thenReturn(page);
+        when(courseMapper.toResponse(any())).thenReturn(new CourseResponse());
+
+        Page<CourseResponse> result = courseService.getAll(null, Pageable.unpaged());
+
+        assertEquals(2, result.getTotalElements());
+        verify(courseRepository).findAll(any(Pageable.class));
+        verify(courseRepository, never()).findAllByStatus(any(), any());
+    }
+
+    @Test
+    void getAll_withActiveFilter_returnsOnlyActiveCourses() {
+        Course c = new Course(); c.setId(1L); c.setStatus(CourseStatus.ACTIVE);
+        Page<Course> page = new PageImpl<>(List.of(c));
+
+        when(courseRepository.findAllByStatus(eq(CourseStatus.ACTIVE), any(Pageable.class))).thenReturn(page);
+        CourseResponse response = CourseResponse.builder().id(1L).status("ACTIVE").build();
+        when(courseMapper.toResponse(any())).thenReturn(response);
+
+        Page<CourseResponse> result = courseService.getAll(CourseStatus.ACTIVE, Pageable.unpaged());
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("ACTIVE", result.getContent().get(0).getStatus());
+        verify(courseRepository).findAllByStatus(eq(CourseStatus.ACTIVE), any(Pageable.class));
+        verify(courseRepository, never()).findAll(any(Pageable.class));
+    }
+
+    @Test
+    void getAll_withArchivedFilter_emptyResult() {
+        when(courseRepository.findAllByStatus(eq(CourseStatus.ARCHIVED), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        Page<CourseResponse> result = courseService.getAll(CourseStatus.ARCHIVED, Pageable.unpaged());
+        assertEquals(0, result.getTotalElements());
+        verify(courseRepository, never()).findAll(any(Pageable.class));
+    }
+
 }

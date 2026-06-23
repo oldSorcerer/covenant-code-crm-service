@@ -117,7 +117,7 @@ public class UserControllerIntegrationTest extends BaseIntegrationTest {
     @Test
     public void getAllUsers_withoutToken_unauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/users"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

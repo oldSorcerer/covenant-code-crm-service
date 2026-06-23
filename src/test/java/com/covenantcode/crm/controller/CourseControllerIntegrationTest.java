@@ -14,7 +14,7 @@ import com.covenantcode.crm.repository.RoleRepository;
 import com.covenantcode.crm.repository.StudyGroupRepository;
 import com.covenantcode.crm.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import com.covenantcode.crm.repository.CourseRepository;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@AutoConfigureMockMvc(addFilters = false)
+@AutoConfigureMockMvc
 public class CourseControllerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
@@ -54,6 +54,11 @@ public class CourseControllerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private StudyGroupRepository studyGroupRepository;
+
+    @BeforeEach
+    void setUp() {
+        courseRepository.deleteAll();
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -184,7 +189,6 @@ public class CourseControllerIntegrationTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.status").value(404));
     }
 
-    @Disabled
     @Test
     void getById_WhenUnauthorized_ShouldReturn401() throws Exception {
         mockMvc.perform(get("/api/v1/courses/1"))
@@ -415,4 +419,65 @@ public class CourseControllerIntegrationTest extends BaseIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("GET /api/v1/courses - без фильтра - 200 OK с пагинацией")
+    @WithMockUser(roles = "MANAGER")
+    void getAll_withoutFilter_returns200WithAllCourses() throws Exception {
+
+        courseRepository.save(buildCourse("Java", CourseStatus.ACTIVE));
+        courseRepository.save(buildCourse("English", CourseStatus.ARCHIVED));
+        courseRepository.save(buildCourse("Python", CourseStatus.ACTIVE));
+
+        mockMvc.perform(get("/api/v1/courses"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content").isArray());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/courses - фильтр status=ACTIVE - только активные")
+    @WithMockUser(roles = "MANAGER")
+    void getAll_withActiveFilter_returnsOnlyActive() throws Exception {
+        courseRepository.save(buildCourse("Java", CourseStatus.ACTIVE));
+        courseRepository.save(buildCourse("English", CourseStatus.ARCHIVED));
+
+        mockMvc.perform(get("/api/v1/courses")
+                        .param("status", "ACTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
+    }
+
+    @Test
+    @DisplayName("фильтр status=ARCHIVED — только архивные")
+    @WithMockUser(roles = "MANAGER")
+    void getAll_withArchivedFilter_returnsOnlyArchived() throws Exception {
+        courseRepository.save(buildCourse("Java", CourseStatus.ACTIVE));
+        courseRepository.save(buildCourse("English", CourseStatus.ARCHIVED));
+
+        mockMvc.perform(get("/api/v1/courses")
+                        .param("status", "ARCHIVED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].status").value("ARCHIVED"));
+    }
+
+    @Test
+    @DisplayName("тест 401")
+    void getAll_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/courses"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private Course buildCourse(String title, CourseStatus status) {
+        Course course = new Course();
+        course.setTitle(title);
+        course.setDescription("desc");
+        course.setDurationInWeeks(4);
+        course.setPrice(BigDecimal.valueOf(1000));
+        course.setStatus(status);
+        return course;
+    }
+
 }

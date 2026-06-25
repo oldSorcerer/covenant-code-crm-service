@@ -1,0 +1,38 @@
+package com.covenantcode.crm.controller;
+
+import com.covenantcode.crm.dto.student.StudentCreateRequest;
+import com.covenantcode.crm.dto.student.StudentResponse;
+import com.covenantcode.crm.service.StudentService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+
+@RestController
+@RequestMapping("/api/v1/students")
+@RequiredArgsConstructor
+@Tag(name = "Students", description = "Управление студентами")
+public class StudentController {
+
+    private final StudentService studentService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(summary = "Создать нового студента", description = "Доступно ролям ADMIN, MANAGER")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Студент успешно создан"),
+            @ApiResponse(responseCode = "400", description = "Ошибка валидации входных данных"),
+            @ApiResponse(responseCode = "404", description = "Указанный userId не найден"),
+            @ApiResponse(responseCode = "409", description = "Пользователь уже привязан к другому студенту")
+    })
+    public StudentResponse create(@Valid @RequestBody StudentCreateRequest request) {
+        return studentService.create(request);
+    }
+}

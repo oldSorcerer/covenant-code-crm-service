@@ -14,6 +14,7 @@ import com.covenantcode.crm.repository.RoleRepository;
 import com.covenantcode.crm.repository.StudyGroupRepository;
 import com.covenantcode.crm.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import com.covenantcode.crm.repository.CourseRepository;
@@ -58,6 +59,11 @@ public class CourseControllerIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         courseRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
+        studyGroupRepository.deleteAll();
     }
 
     @Test

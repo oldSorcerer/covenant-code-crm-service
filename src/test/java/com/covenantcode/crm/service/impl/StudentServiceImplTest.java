@@ -12,15 +12,23 @@ import com.covenantcode.crm.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.jpa.domain.Specification;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -127,5 +135,130 @@ class StudentServiceImplTest {
         assertThrows(ConflictException.class, () -> studentService.create(request));
 
         verify(studentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Список всех студентов без поиска — возвращает всех студентов постранично")
+    void getAll_WithoutSearch_ShouldReturnAllStudentsPaginated() {
+        Pageable pageable = PageRequest.of(0, 20);
+
+        Student student1 = new Student();
+        student1.setId(1L);
+        student1.setFirstName("Алиса");
+        student1.setLastName("Смирнова");
+
+        Student student2 = new Student();
+        student2.setId(2L);
+        student2.setFirstName("Борис");
+        student2.setLastName("Иванов");
+
+        List<Student> students = List.of(student1, student2);
+        Page<Student> studentPage = new PageImpl<>(students, pageable, students.size());
+
+        StudentResponse response1 = new StudentResponse();
+        response1.setId(1L);
+        response1.setFirstName("Алиса");
+        response1.setLastName("Смирнова");
+
+        StudentResponse response2 = new StudentResponse();
+        response2.setId(2L);
+        response2.setFirstName("Борис");
+        response2.setLastName("Иванов");
+
+        when(studentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(studentPage);
+        when(studentMapper.toResponse(student1)).thenReturn(response1);
+        when(studentMapper.toResponse(student2)).thenReturn(response2);
+
+        Page<StudentResponse> result = studentService.getAll(null, pageable);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent()).containsExactly(response1, response2);
+
+        ArgumentCaptor<Specification<Student>> specCaptor = ArgumentCaptor.forClass(Specification.class);
+        verify(studentRepository, times(1)).findAll(specCaptor.capture(), eq(pageable));
+
+        Specification<Student> capturedSpec = specCaptor.getValue();
+        assertThat(capturedSpec).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Поиск по строке — возвращает отфильтрованных студентов")
+    void getAll_WithSearch_ShouldReturnFilteredStudents() {
+        String search = "Смир";
+        Pageable pageable = PageRequest.of(0, 20);
+
+        Student student1 = new Student();
+        student1.setId(1L);
+        student1.setFirstName("Алиса");
+        student1.setLastName("Смирнова");
+        student1.setPhone("+79161234567");
+        student1.setEmail("alice@example.com");
+
+        Student student2 = new Student();
+        student2.setId(2L);
+        student2.setFirstName("Петр");
+        student2.setLastName("Смирнов");
+        student2.setPhone("+79161112233");
+        student2.setEmail("petr@example.com");
+
+        List<Student> students = List.of(student1, student2);
+        Page<Student> studentPage = new PageImpl<>(students, pageable, students.size());
+
+        StudentResponse response1 = new StudentResponse();
+        response1.setId(1L);
+        response1.setFirstName("Алиса");
+        response1.setLastName("Смирнова");
+
+        StudentResponse response2 = new StudentResponse();
+        response2.setId(2L);
+        response2.setFirstName("Петр");
+        response2.setLastName("Смирнов");
+
+        when(studentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(studentPage);
+        when(studentMapper.toResponse(student1)).thenReturn(response1);
+        when(studentMapper.toResponse(student2)).thenReturn(response2);
+
+        Page<StudentResponse> result = studentService.getAll(search, pageable);
+
+        assertNotNull(result);
+        assertEquals(2, result.getTotalElements());
+        assertEquals(2, result.getContent().size());
+        assertTrue(result.getContent().contains(response1));
+        assertTrue(result.getContent().contains(response2));
+
+        result.getContent().forEach(student ->
+                assertTrue(student.getLastName().contains("Смир"))
+        );
+
+        ArgumentCaptor<Specification<Student>> specCaptor = ArgumentCaptor.forClass(Specification.class);
+        verify(studentRepository, times(1)).findAll(specCaptor.capture(), eq(pageable));
+
+        Specification<Student> capturedSpec = specCaptor.getValue();
+        assertNotNull(capturedSpec, "Спецификация не должна быть null при переданном search");
+    }
+
+    @Test
+    @DisplayName("Пустой список студентов — возвращает пустую страницу")
+    void getAll_WhenNoStudents_ShouldReturnEmptyPage() {
+        Pageable pageable = PageRequest.of(0, 20);
+
+        List<Student> emptyList = List.of();
+        Page<Student> emptyPage = new PageImpl<>(emptyList, pageable, 0);
+
+        when(studentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(emptyPage);
+
+        Page<StudentResponse> result = studentService.getAll(null, pageable);
+
+        assertNotNull(result);
+        assertTrue(result.getContent().isEmpty());
+        assertEquals(0, result.getTotalElements());
+        assertEquals(0, result.getTotalPages());
+        assertEquals(0, result.getNumber());
+        assertEquals(20, result.getSize());
+
+        verify(studentRepository, times(1)).findAll(any(Specification.class), eq(pageable));
+        verify(studentMapper, never()).toResponse(any(Student.class));
     }
 }

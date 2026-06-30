@@ -2,6 +2,7 @@ package com.covenantcode.crm.controller;
 
 import com.covenantcode.crm.dto.student.StudentCreateRequest;
 import com.covenantcode.crm.dto.student.StudentResponse;
+import com.covenantcode.crm.dto.student.StudentUpdateRequest;
 import com.covenantcode.crm.service.StudentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,8 +16,17 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 
 @RestController
@@ -61,5 +71,23 @@ public class StudentController {
             @RequestParam(required = false) String search,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
         return studentService.getAll(search, pageable);
+    }
+
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(summary = "Обновить данные студента", description = "Обновляет все поля существующего студента (кроме привязки к учётной записи)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Данные успешно обновлены"),
+            @ApiResponse(responseCode = "400", description = "Некорректный запрос (ошибки валидации)"),
+            @ApiResponse(responseCode = "401", description = "Не авторизован"),
+            @ApiResponse(responseCode = "403", description = "Доступ запрещён (недостаточно прав)"),
+            @ApiResponse(responseCode = "404", description = "Студент с указанным ID не найден")
+    })
+    public ResponseEntity<StudentResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody StudentUpdateRequest request) {
+        StudentResponse response = studentService.update(id, request);
+        return ResponseEntity.ok(response);
     }
 }

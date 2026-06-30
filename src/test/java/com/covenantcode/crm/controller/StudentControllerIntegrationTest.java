@@ -2,6 +2,7 @@ package com.covenantcode.crm.controller;
 
 import com.covenantcode.crm.BaseIntegrationTest;
 import com.covenantcode.crm.dto.student.StudentCreateRequest;
+import com.covenantcode.crm.dto.student.StudentUpdateRequest;
 import com.covenantcode.crm.entity.Role;
 import com.covenantcode.crm.entity.Student;
 import com.covenantcode.crm.entity.User;
@@ -24,10 +25,20 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.*;
+
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class StudentControllerIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -308,6 +319,130 @@ class StudentControllerIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(get("/api/v1/students")
                         .param("page", "0")
                         .param("size", "20"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Тест 5: успешное обновление студента (200)")
+    @WithMockUser(roles = "ADMIN")
+    void update_ShouldReturnOk_WhenValidRequest() throws Exception {
+        Student existingStudent = studentRepository.save(Student.builder()
+                .firstName("Иван")
+                .lastName("Иванов")
+                .phone("123456789")
+                .email("old@test.com")
+                .birthDate(LocalDate.of(2000, 1, 1))
+                .build());
+
+        StudentUpdateRequest updateRequest = StudentUpdateRequest.builder()
+                .firstName("Пётр")
+                .lastName("Петров")
+                .phone("+79998887766")
+                .email("new@test.com")
+                .birthDate(LocalDate.of(1995, 5, 15))
+                .build();
+
+        mockMvc.perform(put("/api/v1/students/{id}", existingStudent.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(existingStudent.getId()))
+                .andExpect(jsonPath("$.firstName").value("Пётр"))
+                .andExpect(jsonPath("$.lastName").value("Петров"))
+                .andExpect(jsonPath("$.phone").value("+79998887766"))
+                .andExpect(jsonPath("$.email").value("new@test.com"))
+                .andExpect(jsonPath("$.birthDate").value("1995-05-15"))
+                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(jsonPath("$.updatedAt").exists())
+                .andExpect(jsonPath("$.updatedAt").isNotEmpty());
+
+        Student updated = studentRepository.findById(existingStudent.getId()).orElseThrow();
+        assertEquals("Пётр", updated.getFirstName());
+        assertEquals("Петров", updated.getLastName());
+    }
+
+    @Test
+    @DisplayName("Тест 6: студент не найден (404)")
+    @WithMockUser(roles = "ADMIN")
+    void update_ShouldReturnNotFound_WhenStudentDoesNotExist() throws Exception {
+        Long nonExistentId = 999L;
+        StudentUpdateRequest updateRequest = StudentUpdateRequest.builder()
+                .firstName("Неважно")
+                .lastName("Неважно")
+                .phone("000")
+                .build();
+
+        mockMvc.perform(put("/api/v1/students/{id}", nonExistentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.type").value("resource-not-found"));
+    }
+
+    @Test
+    @DisplayName("Тест 7: ошибка валидации (400) — пустое firstName")
+    @WithMockUser(roles = "ADMIN")
+    void update_ShouldReturnBadRequest_WhenValidationFails() throws Exception {
+        Student existingStudent = studentRepository.save(Student.builder()
+                .firstName("Valid")
+                .lastName("Student")
+                .phone("111")
+                .build());
+
+        StudentUpdateRequest invalidRequest = StudentUpdateRequest.builder()
+                .firstName("")   // недопустимо – @NotBlank
+                .lastName("Петров")
+                .phone("+79998887766")
+                .build();
+
+        mockMvc.perform(put("/api/v1/students/{id}", existingStudent.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("validation-error"));
+    }
+
+    @Test
+    @DisplayName("Тест 8: TEACHER не может обновить студента (403)")
+    @WithMockUser(roles = "TEACHER")
+    void update_ShouldReturnForbidden_WhenRoleIsTeacher() throws Exception {
+        Student existingStudent = studentRepository.save(Student.builder()
+                .firstName("Any")
+                .lastName("Student")
+                .phone("000")
+                .build());
+
+        StudentUpdateRequest updateRequest = StudentUpdateRequest.builder()
+                .firstName("Changed")
+                .lastName("Name")
+                .phone("111")
+                .build();
+
+        mockMvc.perform(put("/api/v1/students/{id}", existingStudent.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Тест 9: STUDENT не может обновить студента (403)")
+    @WithMockUser(roles = "STUDENT")
+    void update_ShouldReturnForbidden_WhenRoleIsStudent() throws Exception {
+        Student existingStudent = studentRepository.save(Student.builder()
+                .firstName("Any")
+                .lastName("Student")
+                .phone("000")
+                .build());
+
+        StudentUpdateRequest updateRequest = StudentUpdateRequest.builder()
+                .firstName("Changed")
+                .lastName("Name")
+                .phone("111")
+                .build();
+
+        mockMvc.perform(put("/api/v1/students/{id}", existingStudent.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isForbidden());
     }
 }

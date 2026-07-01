@@ -2,6 +2,7 @@ package com.covenantcode.crm.service.impl;
 
 import com.covenantcode.crm.dto.student.StudentCreateRequest;
 import com.covenantcode.crm.dto.student.StudentResponse;
+import com.covenantcode.crm.dto.student.StudentUpdateRequest;
 import com.covenantcode.crm.entity.Student;
 import com.covenantcode.crm.entity.User;
 import com.covenantcode.crm.exception.ConflictException;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -260,5 +262,131 @@ class StudentServiceImplTest {
 
         verify(studentRepository, times(1)).findAll(any(Specification.class), eq(pageable));
         verify(studentMapper, never()).toResponse(any(Student.class));
+    }
+
+    @Test
+    @DisplayName("Тест: успешное обновление студента (200)")
+    void update_ValidRequest_ShouldSucceed() {
+        Long studentId = 1L;
+        Student existingStudent = Student.builder()
+                .id(studentId)
+                .firstName("Old")
+                .lastName("Student")
+                .phone("123")
+                .email("old@example.com")
+                .birthDate(LocalDate.of(2000, 1, 1))
+                .build();
+
+        StudentUpdateRequest request = StudentUpdateRequest.builder()
+                .firstName("Ivan")
+                .lastName("Ivanov")
+                .phone("+79123456789")
+                .email("ivan@example.com")
+                .birthDate(LocalDate.of(1995, 5, 15))
+                .build();
+
+        Student updatedStudent = Student.builder()
+                .id(studentId)
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .birthDate(request.getBirthDate())
+                .build();
+
+        StudentResponse expectedResponse = StudentResponse.builder()
+                .id(studentId)
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .birthDate(request.getBirthDate())
+                .build();
+
+        when(studentRepository.findById(studentId)).thenReturn(Optional.of(existingStudent));
+        when(studentRepository.save(any(Student.class))).thenReturn(updatedStudent);
+        when(studentMapper.toResponse(updatedStudent)).thenReturn(expectedResponse);
+
+        StudentResponse actualResponse = studentService.update(studentId, request);
+
+        assertNotNull(actualResponse);
+        assertEquals(expectedResponse.getId(), actualResponse.getId());
+        assertEquals(request.getFirstName(), actualResponse.getFirstName());
+        assertEquals(request.getLastName(), actualResponse.getLastName());
+        assertEquals(request.getPhone(), actualResponse.getPhone());
+        assertEquals(request.getEmail(), actualResponse.getEmail());
+        assertEquals(request.getBirthDate(), actualResponse.getBirthDate());
+
+        assertEquals(request.getFirstName(), existingStudent.getFirstName());
+        assertEquals(request.getLastName(), existingStudent.getLastName());
+        assertEquals(request.getPhone(), existingStudent.getPhone());
+        assertEquals(request.getEmail(), existingStudent.getEmail());
+        assertEquals(request.getBirthDate(), existingStudent.getBirthDate());
+
+        verify(studentRepository).findById(studentId);
+        verify(studentRepository).save(existingStudent);
+        verify(studentMapper).toResponse(updatedStudent);
+        verifyNoMoreInteractions(studentRepository, studentMapper);
+    }
+
+    @Test
+    @DisplayName("Тест: студент не найден (404)")
+    void update_StudentNotFound_ShouldThrowResourceNotFoundException() {
+        Long studentId = 99L;
+        StudentUpdateRequest request = StudentUpdateRequest.builder()
+                .firstName("Ivan")
+                .lastName("Ivanov")
+                .phone("+79123456789")
+                .build();
+
+        when(studentRepository.findById(studentId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> studentService.update(studentId, request));
+
+        verify(studentRepository).findById(studentId);
+        verify(studentRepository, never()).save(any());
+        verifyNoInteractions(studentMapper);
+    }
+
+
+    @Test
+    @DisplayName("Тест: обновление не трогает поле userId (привязка к пользователю сохраняется)")
+    void update_ShouldNotChangeUserAssociation() {
+        Long studentId = 1L;
+        Long userId = 5L;
+        User user = new User();
+        user.setId(userId);
+
+        Student existingStudent = Student.builder()
+                .id(studentId)
+                .firstName("Old")
+                .lastName("Student")
+                .phone("123")
+                .user(user)
+                .build();
+
+        StudentUpdateRequest request = StudentUpdateRequest.builder()
+                .firstName("New")
+                .lastName("Name")
+                .phone("+79000000000")
+                .build();
+
+        User originalUser = existingStudent.getUser();
+
+        when(studentRepository.findById(studentId)).thenReturn(Optional.of(existingStudent));
+        when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(studentMapper.toResponse(any(Student.class))).thenReturn(StudentResponse.builder().build());
+
+        studentService.update(studentId, request);
+
+        assertNotNull(existingStudent.getUser());
+        assertEquals(originalUser, existingStudent.getUser());
+        assertEquals(userId, existingStudent.getUser().getId());
+
+        assertEquals(request.getFirstName(), existingStudent.getFirstName());
+        assertEquals(request.getLastName(), existingStudent.getLastName());
+        assertEquals(request.getPhone(), existingStudent.getPhone());
+
+        verify(studentRepository).save(existingStudent);
     }
 }

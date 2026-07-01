@@ -2,6 +2,7 @@ package com.covenantcode.crm.service.impl;
 
 import com.covenantcode.crm.dto.student.StudentCreateRequest;
 import com.covenantcode.crm.dto.student.StudentResponse;
+import com.covenantcode.crm.dto.student.StudentUpdateRequest;
 import com.covenantcode.crm.entity.Student;
 import com.covenantcode.crm.entity.User;
 import com.covenantcode.crm.exception.ConflictException;
@@ -87,5 +88,19 @@ public class StudentServiceImpl implements StudentService {
         }
         return studentRepository.findAll(spec, pageable)
                 .map(studentMapper::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public StudentResponse update(Long id, StudentUpdateRequest request) {
+        Student student = studentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Student с id " + id + " не найден"));
+        student.setFirstName(request.getFirstName());
+        student.setLastName(request.getLastName());
+        student.setPhone(request.getPhone());
+        student.setEmail(request.getEmail());
+        student.setBirthDate(request.getBirthDate());
+        Student savedStudent = studentRepository.save(student);
+        return studentMapper.toResponse(savedStudent);
     }
 }

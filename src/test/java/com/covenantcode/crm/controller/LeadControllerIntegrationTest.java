@@ -104,6 +104,11 @@ public class LeadControllerIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        leadRepository.deleteAll();
+        userRepository.deleteAll();
+        courseRepository.deleteAll();
+        roleRepository.deleteAll();
+
         testCourse = new Course();
         testCourse.setTitle("Test Course");
         testCourse.setDescription("Integration test course");
